@@ -7,14 +7,22 @@
 #define INVALID_LPN     (~(0ULL))
 #define UNMAPPED_PPA    (~(0ULL))
 
+/*划分SLC和QLC的区域*/
+#define SLC_SIZE (32)
+#define QLC_SIZE (128)
+
 enum {
     NAND_READ =  0,
     NAND_WRITE = 1,
     NAND_ERASE = 2,
 
-    NAND_READ_LATENCY = 40000,
-    NAND_PROG_LATENCY = 200000,
-    NAND_ERASE_LATENCY = 2000000,
+    NAND_READ_LATENCY_QLC = 90000,
+    NAND_PROG_LATENCY_QLC = 830000,
+    NAND_ERASE_LATENCY_QLC = 3250000,
+
+    NAND_READ_LATENCY_SLC = 3000,
+    NAND_PROG_LATENCY_SLC = 100000,
+    NAND_ERASE_LATENCY_SLC = 900000,
 };
 
 enum {
@@ -42,6 +50,8 @@ enum {
     FEMU_RESET_ACCT = 5,
     FEMU_ENABLE_LOG = 6,
     FEMU_DISABLE_LOG = 7,
+
+    FEMU_PAGES_WRITTEN_STATISTIC = 8,
 };
 
 
@@ -65,7 +75,8 @@ struct ppa {
             uint64_t rsv : 1;
         } g;
 
-        uint64_t ppa;
+        uint64_t ppa;//记录是否被映射
+        uint64_t luwtime;//last_user_write_time
     };
 };
 
@@ -116,9 +127,13 @@ struct ssdparams {
     int luns_per_ch;  /* # of LUNs per channel */
     int nchs;         /* # of channels in the SSD */
 
-    int pg_rd_lat;    /* NAND page read latency in nanoseconds */
-    int pg_wr_lat;    /* NAND page program latency in nanoseconds */
-    int blk_er_lat;   /* NAND block erase latency in nanoseconds */
+    int pg_rd_lat_QLC;    /* NAND page read latency of QLC in nanoseconds */
+    int pg_wr_lat_QLC;    /* NAND page program latency in nanoseconds */
+    int blk_er_lat_QLC;   /* NAND block erase latency in nanoseconds */
+
+    int pg_rd_lat_SLC;    /* NAND page read latency of SLC in nanoseconds */
+    int pg_wr_lat_SLC;    /* NAND page program latency in nanoseconds */
+    int blk_er_lat_SLC;   /* NAND block erase latency in nanoseconds */
     int ch_xfer_lat;  /* channel transfer latency for one page in nanoseconds
                        * this defines the channel bandwith
                        */
@@ -160,9 +175,13 @@ typedef struct line {
     int id;  /* line id, the same as corresponding block id */
     int ipc; /* invalid page count in this line */
     int vpc; /* valid page count in this line */
-    QTAILQ_ENTRY(line) entry; /* in either {free,victim,full} list */
+    QTAILQ_ENTRY(line) entry; /* in either {free,victim,full} list */ 
     /* position in the priority queue for victim lines */
     size_t                  pos;
+
+    /*sepbit property*/
+    uint64_t creation_time;/*segment creation time 第一次写的时间戳*/
+    bool is_group1;/*是否属于group1,短有效期用户写数据*/
 } line;
 
 /* wp: record next write addr */
@@ -173,6 +192,7 @@ struct write_pointer {
     int pg;
     int blk;
     int pl;
+    int index;
 };
 
 struct line_mgmt {
@@ -194,14 +214,31 @@ struct nand_cmd {
     int64_t stime; /* Coperd: request arrival time */
 };
 
+struct ssdstatus {
+    /*sepbit*/    
+    uint64_t sep_t;/*global timestamp*/
+    uint64_t sep_l;/*average segment lifespan*/
+    uint64_t sep_l_temp;/*sum of class 1 segment lifespan*/
+    int nc;/*fix number count*/
+};
+
 struct ssd {
     char *ssdname;
     struct ssdparams sp;
+    struct ssdstatus st;/*sepbit status*/
     struct ssd_channel *ch;
     struct ppa *maptbl; /* page level mapping table */
     uint64_t *rmap;     /* reverse mapptbl, assume it's stored in OOB */
-    struct write_pointer wp;
-    struct line_mgmt lm;
+    struct write_pointer wp1;
+    struct write_pointer wp2;
+    struct write_pointer wp3;
+    struct write_pointer wp4;
+    struct write_pointer wp5;
+    struct write_pointer wp6;
+    struct line_mgmt lm_slc;
+    struct line_mgmt lm_qlc;
+
+    uint64_t pages_written;/*numbers for write pages statistic*/
 
     /* lockless ring for communication with NVMe IO thread */
     struct rte_ring **to_ftl;
@@ -223,10 +260,16 @@ void ssd_init(FemuCtrl *n);
 #define ftl_err(fmt, ...) \
     do { fprintf(stderr, "[FEMU] FTL-Err: " fmt, ## __VA_ARGS__); } while (0)
 
+/*#define ftl_log(fmt, ...) \
+    do { printf("[FEMU] FTL-Log: " fmt, ## __VA_ARGS__); } while (0)*/
 #define ftl_log(fmt, ...) \
-    do { printf("[FEMU] FTL-Log: " fmt, ## __VA_ARGS__); } while (0)
-
-
+    do { \
+        FILE* log_file = fopen("/home/yihao/femu/hw/femu/bbssd/log.txt", "a"); \
+        if (log_file) { \
+            fprintf(log_file, "[FEMU] FTL-Log: " fmt, ## __VA_ARGS__); \
+            fclose(log_file); \
+        } \
+    } while (0)
 /* FEMU assert() */
 #ifdef FEMU_DEBUG_FTL
 #define ftl_assert(expression) assert(expression)
