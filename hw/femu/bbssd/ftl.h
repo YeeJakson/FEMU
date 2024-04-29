@@ -180,8 +180,6 @@ typedef struct line {
     /* position in the priority queue for victim lines */
     size_t                  pos;
 
-    /*sepbit property*/
-    uint64_t creation_time;/*segment creation time 第一次写的时间戳*/
     bool is_group1;/*是否属于group1,短有效期用户写数据*/
 } line;
 
