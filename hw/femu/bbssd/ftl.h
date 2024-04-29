@@ -8,8 +8,9 @@
 #define UNMAPPED_PPA    (~(0ULL))
 
 /*划分SLC和QLC的区域*/
-#define SLC_SIZE (32)
-#define QLC_SIZE (128)
+/*slc区域的存储单元数量约为总数的5%*/
+#define SLC_SIZE (13)
+#define QLC_SIZE (1011)
 
 enum {
     NAND_READ =  0,
@@ -214,27 +215,24 @@ struct nand_cmd {
     int64_t stime; /* Coperd: request arrival time */
 };
 
-struct ssdstatus {
-    /*sepbit*/    
-    uint64_t sep_t;/*global timestamp*/
-    uint64_t sep_l;/*average segment lifespan*/
-    uint64_t sep_l_temp;/*sum of class 1 segment lifespan*/
-    int nc;/*fix number count*/
-};
+// struct ssdstatus {
+//     /*sepbit*/    
+//     uint64_t sep_t;/*global timestamp*/
+//     uint64_t sep_l;/*average segment lifespan*/
+//     uint64_t sep_l_temp;/*sum of class 1 segment lifespan*/
+//     int nc;/*fix number count*/
+// };
 
 struct ssd {
     char *ssdname;
     struct ssdparams sp;
-    struct ssdstatus st;/*sepbit status*/
+    // struct ssdstatus st;/*sepbit status*/
     struct ssd_channel *ch;
     struct ppa *maptbl; /* page level mapping table */
     uint64_t *rmap;     /* reverse mapptbl, assume it's stored in OOB */
-    struct write_pointer wp1;
-    struct write_pointer wp2;
-    struct write_pointer wp3;
-    struct write_pointer wp4;
-    struct write_pointer wp5;
-    struct write_pointer wp6;
+    struct write_pointer wp_slc;
+    struct write_pointer wp_qlc;
+
     struct line_mgmt lm_slc;
     struct line_mgmt lm_qlc;
 

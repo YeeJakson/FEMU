@@ -283,7 +283,7 @@ static void ssd_init_params(struct ssdparams *spp)
     spp->secs_per_pg = 8;
     spp->pgs_per_blk = 256;
     // spp->blks_per_pl = 256; /* 16GB */
-    spp->blks_per_pl = 160;/*SLC+QLC*/
+    spp->blks_per_pl = 1024;/*SLC+QLC：64G*/
     spp->pls_per_lun = 1;
     spp->luns_per_ch = 8;
     spp->nchs = 8;
@@ -333,13 +333,13 @@ static void ssd_init_params(struct ssdparams *spp)
     check_params(spp);
 }
 
-static void ssd_init_status(struct ssdstatus *stt)
-{
-    stt->sep_t=0;
-    stt->sep_l=UINT64_MAX;/*+∞*/
-    stt->sep_l_temp=0;
-    stt->nc=0;
-}
+// static void ssd_init_status(struct ssdstatus *stt)
+// {
+//     stt->sep_t=0;
+//     stt->sep_l=UINT64_MAX;/*+∞*/
+//     stt->sep_l_temp=0;
+//     stt->nc=0;
+// }
 
 static void ssd_init_nand_page(struct nand_page *pg, struct ssdparams *spp)
 {
@@ -619,7 +619,7 @@ static uint64_t ssd_advance_status(struct ssd *ssd, struct ppa *ppa, struct
         ftl_err("Unsupported NAND command: 0x%x\n", c);
     }
 
-    return lat;//????gc时return后谁接收
+    return lat;
 }
 
 /* update SSD status about one page from PG_VALID -> PG_VALID */
@@ -1010,12 +1010,7 @@ static uint64_t ssd_write(struct ssd *ssd, NvmeRequest *req){
             v = UINT64_MAX;
         }
         /* new write */
-        if(v<stt->sep_l){
-            ppa = get_new_page(ssd, &ssd->wp1);
-        }
-        else{
-            ppa = get_new_page(ssd, &ssd->wp2);
-        }
+        ppa = get_new_page(ssd, &ssd->wp_slc);
         /* update maptbl */
         set_maptbl_ent(ssd, lpn, &ppa);
         /* update rmap */ 
@@ -1024,13 +1019,7 @@ static uint64_t ssd_write(struct ssd *ssd, NvmeRequest *req){
         mark_page_valid(ssd, &ppa);
 
         /* need to advance the write pointer here */
-        if(v<stt->sep_l){
-            ssd_advance_write_pointer(ssd, &ssd->wp1);
-        }
-        else{
-            ssd_advance_write_pointer(ssd, &ssd->wp2);
-        }
-
+        ssd_advance_write_pointer(ssd, &ssd->wp_slc);
         struct nand_cmd swr;
         swr.type = USER_IO;
         swr.cmd = NAND_WRITE;
@@ -1038,8 +1027,6 @@ static uint64_t ssd_write(struct ssd *ssd, NvmeRequest *req){
         /* get latency statistics */
         curlat = ssd_advance_status(ssd, &ppa, &swr);
         maxlat = (curlat > maxlat) ? curlat : maxlat;
-
-        ssd->st.sep_t = ssd->st.sep_t + 1;
     }
 
     return maxlat;
