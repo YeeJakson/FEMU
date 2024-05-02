@@ -66,6 +66,7 @@ struct ppa {
         } g;
 
         uint64_t ppa;
+        uint64_t luwtime;//last_user_write_time
     };
 };
 
@@ -163,6 +164,9 @@ typedef struct line {
     QTAILQ_ENTRY(line) entry; /* in either {free,victim,full} list */
     /* position in the priority queue for victim lines */
     size_t                  pos;
+    /*sepbit property*/
+    uint64_t creation_time;/*segment creation time 第一次写的时间戳*/
+    bool is_group1;
 } line;
 
 /* wp: record next write addr */
@@ -173,6 +177,7 @@ struct write_pointer {
     int pg;
     int blk;
     int pl;
+    int index;
 };
 
 struct line_mgmt {
@@ -194,14 +199,30 @@ struct nand_cmd {
     int64_t stime; /* Coperd: request arrival time */
 };
 
+struct ssdstatus {
+    /*sepbit*/    
+    uint64_t sep_t;/*global timestamp*/
+    uint64_t sep_l;/*average segment lifespan*/
+    uint64_t sep_l_temp;/*sum of class 1 segment lifespan*/
+    int nc;/*fix number count*/
+};
+
 struct ssd {
     char *ssdname;
     struct ssdparams sp;
+    struct ssdstatus st;/*sepbit status*/
     struct ssd_channel *ch;
     struct ppa *maptbl; /* page level mapping table */
     uint64_t *rmap;     /* reverse mapptbl, assume it's stored in OOB */
-    struct write_pointer wp;
+    struct write_pointer wp1;/*write points for six groups*/
+    struct write_pointer wp2;
+    struct write_pointer wp3;
+    struct write_pointer wp4;
+    struct write_pointer wp5;
+    struct write_pointer wp6;
     struct line_mgmt lm;
+
+    uint64_t pages_written;/*numbers for write pages statistic*/
 
     /* lockless ring for communication with NVMe IO thread */
     struct rte_ring **to_ftl;
