@@ -42,6 +42,8 @@ enum {
     FEMU_RESET_ACCT = 5,
     FEMU_ENABLE_LOG = 6,
     FEMU_DISABLE_LOG = 7,
+
+    FEMU_PAGES_WRITTEN_STATISTIC = 8,
 };
 
 
@@ -202,6 +204,8 @@ struct ssd {
     uint64_t *rmap;     /* reverse mapptbl, assume it's stored in OOB */
     struct write_pointer wp;
     struct line_mgmt lm;
+
+    uint64_t pages_written;/*numbers for write pages statistic*/
 
     /* lockless ring for communication with NVMe IO thread */
     struct rte_ring **to_ftl;

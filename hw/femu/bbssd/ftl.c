@@ -212,6 +212,7 @@ static struct ppa get_new_page(struct ssd *ssd)
 {
     struct write_pointer *wpp = &ssd->wp;
     struct ppa ppa;
+    ssd->pages_written += 1;
     ppa.ppa = 0;
     ppa.g.ch = wpp->ch;
     ppa.g.lun = wpp->lun;
@@ -383,6 +384,8 @@ void ssd_init(FemuCtrl *n)
 
     /* initialize all the lines */
     ssd_init_lines(ssd);
+
+    ssd->pages_written = 0;/*init*/
 
     /* initialize write pointer, this is how we allocate new pages for writes */
     ssd_init_write_pointer(ssd);

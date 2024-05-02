@@ -38,9 +38,9 @@ static void bb_flip(FemuCtrl *n, NvmeCmd *cmd)
         femu_log("%s,FEMU GC Delay Emulation [Disabled]!\n", n->devname);
         break;
     case FEMU_ENABLE_DELAY_EMU:
-        ssd->sp.pg_rd_lat = NAND_READ_LATENCY;
-        ssd->sp.pg_wr_lat = NAND_PROG_LATENCY;
-        ssd->sp.blk_er_lat = NAND_ERASE_LATENCY;
+        ssd->sp.pg_rd_lat = NAND_READ_LATENCY_QLC;
+        ssd->sp.pg_wr_lat = NAND_PROG_LATENCY_QLC;
+        ssd->sp.blk_er_lat = NAND_ERASE_LATENCY_QLC;
         ssd->sp.ch_xfer_lat = 0;
         femu_log("%s,FEMU Delay Emulation [Enabled]!\n", n->devname);
         break;
@@ -64,6 +64,10 @@ static void bb_flip(FemuCtrl *n, NvmeCmd *cmd)
     case FEMU_DISABLE_LOG:
         n->print_log = false;
         femu_log("%s,Log print [Disabled]!\n", n->devname);
+        break;
+    case FEMU_PAGES_WRITTEN_STATISTIC:
+        ftl_log("statistic for pages written is %lu\n",ssd->pages_written);
+        ssd->pages_written = 0;
         break;
     default:
         printf("FEMU:%s,Not implemented flip cmd (%lu)\n", n->devname, cdw10);
