@@ -659,7 +659,7 @@ static void gc_read_page(struct ssd *ssd, struct ppa *ppa)
 }
 
 /* move valid page data (already in DRAM) from victim line to a new page */
-static uint64_t gc_write_page(struct ssd *ssd, struct ppa *old_ppa)
+static uint64_t gc_write_page(struct ssd *ssd, struct ppa *old_ppa, bool is_group)
 {
     struct ppa new_ppa;
     struct nand_lun *new_lun;
@@ -885,6 +885,7 @@ static uint64_t ssd_write(struct ssd *ssd, NvmeRequest *req)
 {
     uint64_t lba = req->slba;
     struct ssdparams *spp = &ssd->sp;
+    struct ssdstatus *stt = &ssd->st;
     int len = req->nlb;
     uint64_t start_lpn = lba / spp->secs_per_pg;
     uint64_t end_lpn = (lba + len - 1) / spp->secs_per_pg;
