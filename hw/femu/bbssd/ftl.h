@@ -42,6 +42,8 @@ enum {
     FEMU_RESET_ACCT = 5,
     FEMU_ENABLE_LOG = 6,
     FEMU_DISABLE_LOG = 7,
+
+    FEMU_PAGES_WRITTEN_STATISTIC = 8,
 };
 
 

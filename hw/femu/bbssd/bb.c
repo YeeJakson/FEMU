@@ -65,6 +65,10 @@ static void bb_flip(FemuCtrl *n, NvmeCmd *cmd)
         n->print_log = false;
         femu_log("%s,Log print [Disabled]!\n", n->devname);
         break;
+    case FEMU_PAGES_WRITTEN_STATISTIC:
+        ftl_log("statistic for pages written is %lu\n",ssd->pages_written);
+        ssd->pages_written = 0;
+        break;
     default:
         printf("FEMU:%s,Not implemented flip cmd (%lu)\n", n->devname, cdw10);
     }

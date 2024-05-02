@@ -659,7 +659,7 @@ static void gc_read_page(struct ssd *ssd, struct ppa *ppa)
 }
 
 /* move valid page data (already in DRAM) from victim line to a new page */
-static uint64_t gc_write_page(struct ssd *ssd, struct ppa *old_ppa, bool is_group)
+static uint64_t gc_write_page(struct ssd *ssd, struct ppa *old_ppa, bool is_group1)
 {
     struct ppa new_ppa;
     struct nand_lun *new_lun;
