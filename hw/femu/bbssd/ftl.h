@@ -8,8 +8,8 @@
 #define UNMAPPED_PPA    (~(0ULL))
 
 /*划分SLC和QLC的区域*/
-#define SLC_SIZE (32)
-#define QLC_SIZE (128)
+#define SLC_SIZE (13)
+#define QLC_SIZE (1011)
 
 enum {
     NAND_READ =  0,
