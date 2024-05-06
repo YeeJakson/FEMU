@@ -246,9 +246,16 @@ void ssd_init(FemuCtrl *n);
 #define ftl_err(fmt, ...) \
     do { fprintf(stderr, "[FEMU] FTL-Err: " fmt, ## __VA_ARGS__); } while (0)
 
+// #define ftl_log(fmt, ...) \
+//     do { printf("[FEMU] FTL-Log: " fmt, ## __VA_ARGS__); } while (0)
 #define ftl_log(fmt, ...) \
-    do { printf("[FEMU] FTL-Log: " fmt, ## __VA_ARGS__); } while (0)
-
+    do { \
+        FILE* log_file = fopen("/home/hao/femu/hw/femu/bbssd/log.txt", "a"); \
+        if (log_file) { \
+            fprintf(log_file, "[FEMU] FTL-Log: " fmt, ## __VA_ARGS__); \
+            fclose(log_file); \
+        } \
+    } while (0)
 
 /* FEMU assert() */
 #ifdef FEMU_DEBUG_FTL
