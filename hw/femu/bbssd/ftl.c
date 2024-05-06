@@ -433,6 +433,8 @@ void ssd_init(FemuCtrl *n)
     ssd_init_lines(ssd);
 
     ssd->pages_written = 0;/*init*/
+    qemu_spin_init(ssd->nand_lock);
+    qemu_spin_init(ssd->map_lock);
 
     /* initialize write pointer, this is how we allocate new pages for writes */
     ssd_init_write_pointer(ssd, &ssd->wp_slc, &ssd->lm_slc, 1);
@@ -531,6 +533,7 @@ static uint64_t ssd_advance_status(struct ssd *ssd, struct ppa *ppa, struct
         ifSLC = 0;
     }
 
+    qemu_spin_lock(&ssd->nand_lock);
     switch (c) {
     case NAND_READ:
         /* read: perform NAND cmd first */
@@ -604,6 +607,7 @@ static uint64_t ssd_advance_status(struct ssd *ssd, struct ppa *ppa, struct
     default:
         ftl_err("Unsupported NAND command: 0x%x\n", c);
     }
+    qemu_spin_unlock(&ssd->nand_lock);
 
     return lat;
 }
@@ -804,7 +808,9 @@ static void clean_one_block(struct ssd *ssd, struct ppa *ppa, bool is_group1)
         if (pg_iter->status == PG_VALID) {
             gc_read_page(ssd, ppa);
             /* delay the maptbl update until "write" happens */
+            qemu_spin_lock(&ssd->map_lock);
             gc_write_page(ssd, ppa, is_group1);
+            qemu_spin_unlock(&ssd->map_lock);
             cnt++;
         }
     }
@@ -893,7 +899,9 @@ static uint64_t ssd_read(struct ssd *ssd, NvmeRequest *req)
 
     /* normal IO read path */
     for (lpn = start_lpn; lpn <= end_lpn; lpn++) {
+        qemu_spin_lock(&ssd->map_lock);
         ppa = get_maptbl_ent(ssd, lpn);
+        qemu_spin_unlock(&ssd->map_lock);
         if (!mapped_ppa(&ppa) || !valid_ppa(ssd, &ppa)) {
             //printf("%s,lpn(%" PRId64 ") not mapped to valid ppa\n", ssd->ssdname, lpn);
             //printf("Invalid ppa,ch:%d,lun:%d,blk:%d,pl:%d,pg:%d,sec:%d\n",
@@ -940,18 +948,24 @@ static uint64_t ssd_write(struct ssd *ssd, NvmeRequest *req){
     }
 
     for (lpn = start_lpn; lpn <= end_lpn; lpn++) {
+        qemu_spin_lock(&ssd->map_lock);
         ppa = get_maptbl_ent(ssd, lpn);
+        qemu_spin_unlock(&ssd->map_lock);
         if (mapped_ppa(&ppa)) {
             /* update old page information first */
             mark_page_invalid(ssd, &ppa);
+            qemu_spin_lock(&ssd->map_lock);
             set_rmap_ent(ssd, INVALID_LPN, &ppa);
+            qemu_spin_unlock(&ssd->map_lock);
         }
         /* new write */
         ppa = get_new_page(ssd, &ssd->wp_slc);
         /* update maptbl */
+        qemu_spin_lock(&ssd->map_lock);
         set_maptbl_ent(ssd, lpn, &ppa);
         /* update rmap */ 
         set_rmap_ent(ssd, lpn, &ppa);
+        qemu_spin_unlock(&ssd->map_lock);
 
         mark_page_valid(ssd, &ppa);
 
