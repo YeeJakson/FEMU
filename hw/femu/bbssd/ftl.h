@@ -240,6 +240,9 @@ struct ssd {
 
     uint64_t pages_written;/*numbers for write pages statistic*/
 
+    QemuSpin nand_lock; /*lock for nand ssd advance status*/
+    QemuSpin map_lock;/*lock for map read and modify*/
+
     /* lockless ring for communication with NVMe IO thread */
     struct rte_ring **to_ftl;
     struct rte_ring **to_poller;
