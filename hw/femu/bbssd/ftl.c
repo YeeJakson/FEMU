@@ -387,8 +387,8 @@ void ssd_init(FemuCtrl *n)
     ssd_init_lines(ssd);
 
     ssd->pages_written = 0;/*init*/
-    qemu_spin_init(ssd->nand_lock);
-    qemu_spin_init(ssd->map_lock);
+    qemu_spin_init(&ssd->nand_lock);
+    qemu_spin_init(&ssd->map_lock);
 
     /* initialize write pointer, this is how we allocate new pages for writes */
     ssd_init_write_pointer(ssd);
