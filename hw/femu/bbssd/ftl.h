@@ -206,6 +206,8 @@ struct ssd {
     struct line_mgmt lm;
 
     uint64_t pages_written;/*numbers for write pages statistic*/
+    QemuSpin nand_lock;
+    QemuSpin map_lock;
 
     /* lockless ring for communication with NVMe IO thread */
     struct rte_ring **to_ftl;
