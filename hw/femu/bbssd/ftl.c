@@ -153,7 +153,7 @@ static void ssd_init_write_pointer(struct ssd *ssd, struct write_pointer *wpp, s
     wpp->ch = 0;
     wpp->lun = 0;
     wpp->pg = 0;
-    wpp->blk = 0;
+    wpp->blk = curline->id;
     wpp->pl = 0;
     wpp->index = index;
 }
@@ -393,7 +393,6 @@ static void ssd_init_maptbl(struct ssd *ssd)
     ssd->maptbl = g_malloc0(sizeof(struct ppa) * spp->tt_pgs);
     for (int i = 0; i < spp->tt_pgs; i++) {
         ssd->maptbl[i].ppa = UNMAPPED_PPA;
-        ssd->maptbl[i].luwtime = 0;
     }
 }
 
@@ -433,6 +432,10 @@ void ssd_init(FemuCtrl *n)
     ssd_init_lines(ssd);
 
     ssd->pages_written = 0;/*init*/
+    ssd->gc_lines = 0;
+    ssd->migrate_lines = 0;
+    ssd->pages_to_qlc = 0;
+    ssd->pages_to_slc = 0;
     qemu_spin_init(ssd->nand_lock);
     qemu_spin_init(ssd->map_lock);
 
