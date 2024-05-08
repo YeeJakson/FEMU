@@ -76,8 +76,8 @@ struct ppa {
         } g;
 
         uint64_t ppa;//记录是否被映射
-        uint64_t luwtime;//last_user_write_time
     };
+    uint64_t luwtime;//last_user_write_time
 };
 
 typedef int nand_sec_status_t;
@@ -239,6 +239,10 @@ struct ssd {
     struct line_mgmt lm_qlc;
 
     uint64_t pages_written;/*numbers for write pages statistic*/
+    uint64_t gc_lines;
+    uint64_t migrate_lines;
+    uint64_t pages_to_qlc;
+    uint64_t pages_to_slc;
 
     QemuSpin nand_lock; /*lock for nand ssd advance status*/
     QemuSpin map_lock;/*lock for map read and modify*/

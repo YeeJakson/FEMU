@@ -125,6 +125,7 @@ static void ssd_init_lines(struct ssd *ssd)
         line->ipc = 0;
         line->vpc = 0;
         line->pos = 0;
+        line->creation_time = UINT64_MAX;
         line->is_group1 = 0;
         /* initialize all the lines as free lines */
         QTAILQ_INSERT_TAIL(&lm_qlc->free_line_list, line, entry);
@@ -149,12 +150,14 @@ static void ssd_init_write_pointer(struct ssd *ssd, struct write_pointer *wpp, s
     QTAILQ_REMOVE(&lm->free_line_list, curline, entry);
     lm->free_line_cnt--;
 
+    curline->creation_time = ssd->st.sep_t;
+
     /* wpp->curline is always our next-to-write super-block */
     wpp->curline = curline;
     wpp->ch = 0;
     wpp->lun = 0;
     wpp->pg = 0;
-    wpp->blk = 0;
+    wpp->blk = curline->id;
     wpp->pl = 0;
     wpp->index = index;
 }
@@ -443,6 +446,10 @@ void ssd_init(FemuCtrl *n)
     ssd_init_lines(ssd);
 
     ssd->pages_written = 0;/*init*/
+    ssd->gc_lines = 0;
+    ssd->migrate_lines = 0;
+    ssd->pages_to_qlc = 0;
+    ssd->pages_to_slc = 0;
 
     qemu_spin_init(&ssd->nand_lock);/*init nand lock*/
     qemu_spin_init(&ssd->map_lock);/*init map lock*/
@@ -818,6 +825,7 @@ static struct line *select_victim_line(struct ssd *ssd, struct line_mgmt *lm, bo
 {
     // struct line_mgmt *lm = &ssd->lm;
     struct line *victim_line = NULL;
+    bool status = 0;
 
     victim_line = pqueue_peek(lm->victim_line_pq);
     if (!victim_line) {
@@ -825,14 +833,21 @@ static struct line *select_victim_line(struct ssd *ssd, struct line_mgmt *lm, bo
             victim_line = QTAILQ_FIRST(&lm->full_line_list);
             QTAILQ_REMOVE(&lm->full_line_list, victim_line, entry);
             lm->full_line_cnt--;
+            ssd->migrate_lines += 1;
         }
         else{
             return NULL;
         }
     }
+    else{
+        status = 1;
+    }
 
     if (!force && victim_line->ipc < ssd->sp.pgs_per_line / 8) {
         return NULL;
+    }
+    if(status){
+        ssd->gc_lines += 1;
     }
 
     pqueue_pop(lm->victim_line_pq);
@@ -896,15 +911,16 @@ static int do_gc(struct ssd *ssd, struct line_mgmt *lm, bool force){
     if (!victim_line) {
         return -1;
     }
-
-    if(victim_line->is_group1 == 1){
-        ssd->st.nc += 1;
-        ssd->st.sep_l_temp += (ssd->st.sep_t - victim_line->creation_time);
-    }
-    if(ssd->st.nc == 16){
-        ssd->st.sep_l = ssd->st.sep_l_temp / ssd->st.nc;
-        ssd->st.nc = 0;
-        ssd->st.sep_l_temp = 0;
+    if(victim_line->ipc){
+        if(victim_line->is_group1 == 1){
+            ssd->st.nc += 1;
+            ssd->st.sep_l_temp += (ssd->st.sep_t - victim_line->creation_time);
+        }
+        if(ssd->st.nc == 16){
+            ssd->st.sep_l = ssd->st.sep_l_temp / ssd->st.nc;
+            ssd->st.nc = 0;
+            ssd->st.sep_l_temp = 0;
+        }
     }
 
 
@@ -991,6 +1007,7 @@ static uint64_t ssd_write(struct ssd *ssd, NvmeRequest *req){
     uint64_t curlat = 0, maxlat = 0;
     int r;
     uint64_t v;
+    int status = 0;
 
     if (end_lpn >= spp->tt_pgs) {
         ftl_err("start_lpn=%"PRIu64",tt_pgs=%d\n", start_lpn, ssd->sp.tt_pgs);
@@ -1018,17 +1035,21 @@ static uint64_t ssd_write(struct ssd *ssd, NvmeRequest *req){
             qemu_spin_lock(&ssd->map_lock);
             set_rmap_ent(ssd, INVALID_LPN, &ppa);
             qemu_spin_unlock(&ssd->map_lock);
-            v = ppa.luwtime;
+            v = stt->sep_t - ppa.luwtime;
         }
         else{
-            v = UINT64_MAX;
+            v = 0;
         }
         /* new write */
         if(v<stt->sep_l){
             ppa = get_new_page(ssd, &ssd->wp1);
+            ssd->pages_to_slc += 1;
+            status = 1;
         }
         else{
             ppa = get_new_page(ssd, &ssd->wp2);
+            ssd->pages_to_qlc += 1;
+            status = 2;
         }
         /* update maptbl */
         qemu_spin_lock(&ssd->map_lock);
@@ -1040,10 +1061,10 @@ static uint64_t ssd_write(struct ssd *ssd, NvmeRequest *req){
         mark_page_valid(ssd, &ppa);
 
         /* need to advance the write pointer here */
-        if(v<stt->sep_l){
+        if(status == 1){
             ssd_advance_write_pointer(ssd, &ssd->wp1);
         }
-        else{
+        else if(status == 2){
             ssd_advance_write_pointer(ssd, &ssd->wp2);
         }
 
