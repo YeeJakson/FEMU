@@ -436,8 +436,8 @@ void ssd_init(FemuCtrl *n)
     ssd->migrate_lines = 0;
     ssd->pages_to_qlc = 0;
     ssd->pages_to_slc = 0;
-    qemu_spin_init(ssd->nand_lock);
-    qemu_spin_init(ssd->map_lock);
+    qemu_spin_init(&ssd->nand_lock);
+    qemu_spin_init(&ssd->map_lock);
 
     /* initialize write pointer, this is how we allocate new pages for writes */
     ssd_init_write_pointer(ssd, &ssd->wp_slc, &ssd->lm_slc, 1);
@@ -733,6 +733,7 @@ static uint64_t gc_write_page(struct ssd *ssd, struct ppa *old_ppa, bool is_grou
 
     ftl_assert(valid_lpn(ssd, lpn));
     new_ppa = get_new_page(ssd, &ssd->wp_qlc);
+    ssd->pages_to_qlc += 1;
 
     /* update maptbl */
     set_maptbl_ent(ssd, lpn, &new_ppa);
@@ -778,6 +779,7 @@ static struct line *select_victim_line(struct ssd *ssd, struct line_mgmt *lm, bo
             victim_line = QTAILQ_FIRST(&lm->full_line_list);
             QTAILQ_REMOVE(&lm->full_line_list, victim_line, entry);
             lm->full_line_cnt--;
+            ssd->migrate_lines += 1;
         }
         else{
             return NULL;
@@ -786,6 +788,9 @@ static struct line *select_victim_line(struct ssd *ssd, struct line_mgmt *lm, bo
 
     if (!force && victim_line->ipc < ssd->sp.pgs_per_line / 8) {
         return NULL;
+    }
+    if(victim_line->ipc){
+        ssd->gc_lines += 1;
     }
 
     pqueue_pop(lm->victim_line_pq);
@@ -963,6 +968,7 @@ static uint64_t ssd_write(struct ssd *ssd, NvmeRequest *req){
         }
         /* new write */
         ppa = get_new_page(ssd, &ssd->wp_slc);
+        ssd->pages_to_slc += 1;
         /* update maptbl */
         qemu_spin_lock(&ssd->map_lock);
         set_maptbl_ent(ssd, lpn, &ppa);
