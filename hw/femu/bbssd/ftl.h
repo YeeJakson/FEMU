@@ -246,6 +246,7 @@ struct ssd {
 
     QemuSpin nand_lock; /*lock for nand ssd advance status*/
     QemuSpin map_lock;/*lock for map read and modify*/
+    QemuSpin count_lock;
 
     /* lockless ring for communication with NVMe IO thread */
     struct rte_ring **to_ftl;
