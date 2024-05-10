@@ -38,25 +38,25 @@ static void bb_flip(FemuCtrl *n, NvmeCmd *cmd)
         femu_log("%s,FEMU GC Delay Emulation [Disabled]!\n", n->devname);
         break;
     case FEMU_ENABLE_DELAY_EMU:
-        // ssd->sp.pg_rd_lat_QLC = NAND_READ_LATENCY_QLC;
-        // ssd->sp.pg_wr_lat_QLC = NAND_PROG_LATENCY_QLC;
-        // ssd->sp.blk_er_lat_QLC = NAND_ERASE_LATENCY_QLC;
-        // ssd->sp.ch_xfer_lat = 0;
+        ssd->sp.pg_rd_lat_QLC = NAND_READ_LATENCY_QLC;
+        ssd->sp.pg_wr_lat_QLC = NAND_PROG_LATENCY_QLC;
+        ssd->sp.blk_er_lat_QLC = NAND_ERASE_LATENCY_QLC;
+        ssd->sp.ch_xfer_lat = 0;
 
-        // ssd->sp.pg_rd_lat_SLC = NAND_READ_LATENCY_SLC;
-        // ssd->sp.pg_wr_lat_SLC = NAND_PROG_LATENCY_SLC;
-        // ssd->sp.blk_er_lat_SLC = NAND_ERASE_LATENCY_SLC;
+        ssd->sp.pg_rd_lat_SLC = NAND_READ_LATENCY_SLC;
+        ssd->sp.pg_wr_lat_SLC = NAND_PROG_LATENCY_SLC;
+        ssd->sp.blk_er_lat_SLC = NAND_ERASE_LATENCY_SLC;
         femu_log("%s,FEMU Delay Emulation [Enabled]!\n", n->devname);
         break;
     case FEMU_DISABLE_DELAY_EMU:
-        // ssd->sp.pg_rd_lat_QLC = 0;
-        // ssd->sp.pg_wr_lat_QLC = 0;
-        // ssd->sp.blk_er_lat_QLC = 0;
-        // ssd->sp.ch_xfer_lat = 0;
+        ssd->sp.pg_rd_lat_QLC = 0;
+        ssd->sp.pg_wr_lat_QLC = 0;
+        ssd->sp.blk_er_lat_QLC = 0;
+        ssd->sp.ch_xfer_lat = 0;
 
-        // ssd->sp.pg_rd_lat_SLC = 0;
-        // ssd->sp.pg_wr_lat_SLC = 0;
-        // ssd->sp.blk_er_lat_SLC = 0;
+        ssd->sp.pg_rd_lat_SLC = 0;
+        ssd->sp.pg_wr_lat_SLC = 0;
+        ssd->sp.blk_er_lat_SLC = 0;
         femu_log("%s,FEMU Delay Emulation [Disabled]!\n", n->devname);
         break;
     case FEMU_RESET_ACCT:
@@ -75,11 +75,13 @@ static void bb_flip(FemuCtrl *n, NvmeCmd *cmd)
         break;
     case FEMU_PAGES_WRITTEN_STATISTIC:
         ftl_log("statistic for pages written is %lu\n",ssd->pages_written);
+        ftl_log("statistic for pages written is %lu\n",ssd->pages_read);
         ftl_log("statistic for lines gc is %lu\n",ssd->gc_lines);
         ftl_log("statistic for lines migrated is %lu\n",ssd->migrate_lines);
         ftl_log("statistic for pages written to qlc is %lu\n",ssd->pages_to_qlc);
         ftl_log("statistic for pages written to slc is %lu\n",ssd->pages_to_slc);
         ssd->pages_written = 0;
+        ssd->pages_read = 0;
         ssd->migrate_lines = 0;
         ssd->gc_lines = 0;
         ssd->pages_to_slc = 0;
