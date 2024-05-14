@@ -255,9 +255,9 @@ static void ssd_advance_write_pointer(struct ssd *ssd, struct write_pointer *wpp
 static struct ppa get_new_page(struct ssd *ssd, struct write_pointer *wpp)
 {
     // struct write_pointer *wpp = &ssd->wp;
-    // qemu_spin_lock(&ssd->count_lock);
+    qemu_spin_lock(&ssd->count_lock);
     ssd->pages_written += 1;
-    // qemu_spin_unlock(&ssd->count_lock);
+    qemu_spin_unlock(&ssd->count_lock);
     struct ppa ppa;
     ppa.ppa = 0;//在映射表内的ppa该项值都为0，否则为unmapped_ppa
     ppa.luwtime = ssd->st.sep_t;//sepbit-last_user_write_time,就在这更新吧
@@ -448,6 +448,7 @@ void ssd_init(FemuCtrl *n)
     ssd_init_lines(ssd);
 
     ssd->pages_written = 0;/*init*/
+    ssd->pages_read = 0;
     ssd->gc_lines = 0;
     ssd->migrate_lines = 0;
     ssd->pages_to_qlc = 0;
@@ -456,6 +457,7 @@ void ssd_init(FemuCtrl *n)
     qemu_spin_init(&ssd->nand_lock);/*init nand lock*/
     qemu_spin_init(&ssd->map_lock);/*init map lock*/
     qemu_spin_init(&ssd->count_lock);
+    qemu_spin_init(&ssd->countread_lock);
 
     /* initialize write pointer, this is how we allocate new pages for writes */
     ssd_init_write_pointer(ssd, &ssd->wp1, &ssd->lm_slc, 1);
@@ -558,7 +560,7 @@ static uint64_t ssd_advance_status(struct ssd *ssd, struct ppa *ppa, struct
         ifSLC = 0;
     }
 
-    // qemu_spin_lock(&ssd->nand_lock);
+    qemu_spin_lock(&ssd->nand_lock);
 
     switch (c) {
     case NAND_READ:
@@ -633,7 +635,7 @@ static uint64_t ssd_advance_status(struct ssd *ssd, struct ppa *ppa, struct
     default:
         ftl_err("Unsupported NAND command: 0x%x\n", c);
     }
-    // qemu_spin_unlock(&ssd->nand_lock);
+    qemu_spin_unlock(&ssd->nand_lock);
 
     return lat;
 }
@@ -836,9 +838,9 @@ static struct line *select_victim_line(struct ssd *ssd, struct line_mgmt *lm, bo
             victim_line = QTAILQ_FIRST(&lm->full_line_list);
             QTAILQ_REMOVE(&lm->full_line_list, victim_line, entry);
             lm->full_line_cnt--;
-            // qemu_spin_lock(&ssd->count_lock);
+            qemu_spin_lock(&ssd->count_lock);
             ssd->migrate_lines += 1;
-            // qemu_spin_unlock(&ssd->count_lock);
+            qemu_spin_unlock(&ssd->count_lock);
         }
         else{
             return NULL;
@@ -852,9 +854,9 @@ static struct line *select_victim_line(struct ssd *ssd, struct line_mgmt *lm, bo
         return NULL;
     }
     if(status){
-        // qemu_spin_lock(&ssd->count_lock);
+        qemu_spin_lock(&ssd->count_lock);
         ssd->gc_lines += 1;
-        // qemu_spin_unlock(&ssd->count_lock);
+        qemu_spin_unlock(&ssd->count_lock);
     }
 
     pqueue_pop(lm->victim_line_pq);
@@ -880,9 +882,9 @@ static void clean_one_block(struct ssd *ssd, struct ppa *ppa, bool is_group1)
         if (pg_iter->status == PG_VALID) {
             gc_read_page(ssd, ppa);
             /* delay the maptbl update until "write" happens */
-            // qemu_spin_lock(&ssd->map_lock);
+            qemu_spin_lock(&ssd->map_lock);
             gc_write_page(ssd, ppa, is_group1);
-            // qemu_spin_unlock(&ssd->map_lock);
+            qemu_spin_unlock(&ssd->map_lock);
             cnt++;
         }
     }
@@ -981,15 +983,19 @@ static uint64_t ssd_read(struct ssd *ssd, NvmeRequest *req)
 
     /* normal IO read path */
     for (lpn = start_lpn; lpn <= end_lpn; lpn++) {
-        // qemu_spin_lock(&ssd->map_lock);
+        qemu_spin_lock(&ssd->map_lock);
         ppa = get_maptbl_ent(ssd, lpn);
-        // qemu_spin_unlock(&ssd->map_lock);
+        qemu_spin_unlock(&ssd->map_lock);
         if (!mapped_ppa(&ppa) || !valid_ppa(ssd, &ppa)) {
             //printf("%s,lpn(%" PRId64 ") not mapped to valid ppa\n", ssd->ssdname, lpn);
             //printf("Invalid ppa,ch:%d,lun:%d,blk:%d,pl:%d,pg:%d,sec:%d\n",
             //ppa.g.ch, ppa.g.lun, ppa.g.blk, ppa.g.pl, ppa.g.pg, ppa.g.sec);
             continue;
         }
+
+        qemu_spin_lock(&ssd->count_lock);
+        ssd->pages_read += 1;
+        qemu_spin_unlock(&ssd->count_lock);
 
         struct nand_cmd srd;
         srd.type = USER_IO;
@@ -1033,41 +1039,41 @@ static uint64_t ssd_write(struct ssd *ssd, NvmeRequest *req){
     }
 
     for (lpn = start_lpn; lpn <= end_lpn; lpn++) {
-        // qemu_spin_lock(&ssd->map_lock);
+        qemu_spin_lock(&ssd->map_lock);
         ppa = get_maptbl_ent(ssd, lpn);
-        // qemu_spin_unlock(&ssd->map_lock);
+        qemu_spin_unlock(&ssd->map_lock);
         if (mapped_ppa(&ppa)) {
             /* update old page information first */
             mark_page_invalid(ssd, &ppa);
-            // qemu_spin_lock(&ssd->map_lock);
+            qemu_spin_lock(&ssd->map_lock);
             set_rmap_ent(ssd, INVALID_LPN, &ppa);
-            // qemu_spin_unlock(&ssd->map_lock);
+            qemu_spin_unlock(&ssd->map_lock);
             v = stt->sep_t - ppa.luwtime;
         }
         else{
-            v = 0;
+            v = UINT64_MAX;
         }
         /* new write */
         if(v<stt->sep_l){
             ppa = get_new_page(ssd, &ssd->wp1);
-            // qemu_spin_lock(&ssd->count_lock);
+            qemu_spin_lock(&ssd->count_lock);
             ssd->pages_to_slc += 1;
-            // qemu_spin_unlock(&ssd->count_lock);
+            qemu_spin_unlock(&ssd->count_lock);
             status = 1;
         }
         else{
             ppa = get_new_page(ssd, &ssd->wp2);
-            // qemu_spin_lock(&ssd->count_lock);
+            qemu_spin_lock(&ssd->countread_lock);
             ssd->pages_to_qlc += 1;
-            // qemu_spin_unlock(&ssd->count_lock);
+            qemu_spin_unlock(&ssd->countread_lock);
             status = 2;
         }
         /* update maptbl */
-        // qemu_spin_lock(&ssd->map_lock);
+        qemu_spin_lock(&ssd->map_lock);
         set_maptbl_ent(ssd, lpn, &ppa);
         /* update rmap */ 
         set_rmap_ent(ssd, lpn, &ppa);
-        // qemu_spin_unlock(&ssd->map_lock);
+        qemu_spin_unlock(&ssd->map_lock);
 
         mark_page_valid(ssd, &ppa);
 

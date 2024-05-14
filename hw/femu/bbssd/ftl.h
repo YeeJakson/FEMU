@@ -239,6 +239,7 @@ struct ssd {
     struct line_mgmt lm_qlc;
 
     uint64_t pages_written;/*numbers for write pages statistic*/
+    uint64_t pages_read;
     uint64_t gc_lines;
     uint64_t migrate_lines;
     uint64_t pages_to_qlc;
@@ -247,6 +248,7 @@ struct ssd {
     QemuSpin nand_lock; /*lock for nand ssd advance status*/
     QemuSpin map_lock;/*lock for map read and modify*/
     QemuSpin count_lock;
+    QemuSpin countread_lock;
 
     /* lockless ring for communication with NVMe IO thread */
     struct rte_ring **to_ftl;
