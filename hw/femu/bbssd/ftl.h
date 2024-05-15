@@ -206,8 +206,14 @@ struct ssd {
     struct line_mgmt lm;
 
     uint64_t pages_written;/*numbers for write pages statistic*/
+    uint64_t pages_read;
+    uint64_t gc_lines;
+    uint64_t pages_user_writen;
+
     QemuSpin nand_lock;
     QemuSpin map_lock;
+    QemuSpin count_lock;
+    QemuSpin read_lock;
 
     /* lockless ring for communication with NVMe IO thread */
     struct rte_ring **to_ftl;
@@ -233,7 +239,7 @@ void ssd_init(FemuCtrl *n);
     do { printf("[FEMU] FTL-Log: " fmt, ## __VA_ARGS__); } while (0)*/
 #define ftl_log(fmt, ...) \
     do { \
-        FILE* log_file = fopen("/home/hao/femu/hw/femu/bbssd/log.txt", "a"); \
+        FILE* log_file = fopen("/home/yihao/femu/hw/femu/bbssd/log.txt", "a"); \
         if (log_file) { \
             fprintf(log_file, "[FEMU] FTL-Log: " fmt, ## __VA_ARGS__); \
             fclose(log_file); \
