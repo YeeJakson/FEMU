@@ -67,7 +67,15 @@ static void bb_flip(FemuCtrl *n, NvmeCmd *cmd)
         break;
     case FEMU_PAGES_WRITTEN_STATISTIC:
         ftl_log("statistic for pages written is %lu\n",ssd->pages_written);
+        ftl_log("statistic for pages read is %lu\n",ssd->pages_read);
+        ftl_log("statistic for pages gc is %lu\n",ssd->pages_gc);
+        ftl_log("statistic for lines gc is %lu\n",ssd->gc_lines);
+        ftl_log("statistic for pages user written is %lu\n",ssd->pages_user_written);
         ssd->pages_written = 0;
+        ssd->pages_read = 0;
+        ssd->pages_read = 0;
+        ssd->gc_lines = 0;
+        ssd->pages_user_written = 0;
         break;
     default:
         printf("FEMU:%s,Not implemented flip cmd (%lu)\n", n->devname, cdw10);
