@@ -73,7 +73,7 @@ static void bb_flip(FemuCtrl *n, NvmeCmd *cmd)
         ftl_log("statistic for pages user written is %lu\n",ssd->pages_user_written);
         ssd->pages_written = 0;
         ssd->pages_read = 0;
-        ssd->pages_read = 0;
+        ssd->pages_gc = 0;
         ssd->gc_lines = 0;
         ssd->pages_user_written = 0;
         break;
